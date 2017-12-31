@@ -10,7 +10,7 @@ find_package(fmt REQUIRED)
 
 link_libraries(fmt::fmt)
 
-add_library(sh-obj STATIC environment.cpp matrix.cpp cstring.cpp)
+add_library(sh-obj STATIC environment.cpp matrix.cpp cstring.cpp cfile.cpp)
 
 add_library(sh-engine SHARED engine.cpp engine.def)
 target_link_libraries(sh-engine PRIVATE sh-obj)

@@ -1,5 +1,6 @@
 #include "pch.h"
 
+#include "cfile.h"
 #include "engine.h"
 
 static void help_command(Environment& e);
@@ -12,7 +13,7 @@ static void inner_command(Environment& e)
     auto m2 = e.stack.pop_matrix();
     auto m1 = e.stack.pop_matrix();
     e.stack.push(inner_product(m1, m2, extent, stride1, stride2));
-    e.stack.display_top();
+    e.auto_display();
 }
 
 static void exit_command(Environment& e) { std::exit(0); }
@@ -22,7 +23,7 @@ static void stack_command(Environment& e) { e.stack.display(); }
 static void pop_command(Environment& e)
 {
     e.stack.pop();
-    e.stack.display_top();
+    e.auto_display();
 }
 
 static void plus_command(Environment& e)
@@ -30,7 +31,7 @@ static void plus_command(Environment& e)
     auto a = e.stack.pop_double();
     auto b = e.stack.pop_double();
     e.stack.push(a + b);
-    e.stack.display_top();
+    e.auto_display();
 }
 
 static void minus_command(Environment& e)
@@ -38,21 +39,21 @@ static void minus_command(Environment& e)
     auto a = e.stack.pop_double();
     auto b = e.stack.pop_double();
     e.stack.push(b - a);
-    e.stack.display_top();
+    e.auto_display();
 }
 static void mult_command(Environment& e)
 {
     auto a = e.stack.pop_double();
     auto b = e.stack.pop_double();
     e.stack.push(a * b);
-    e.stack.display_top();
+    e.auto_display();
 }
 static void div_command(Environment& e)
 {
     auto a = e.stack.pop_double();
     auto b = e.stack.pop_double();
     e.stack.push(b / a);
-    e.stack.display_top();
+    e.auto_display();
 }
 static void matrix_command(Environment& e)
 {
@@ -62,7 +63,7 @@ static void matrix_command(Environment& e)
     for (int x = extent - 1; x >= 0; --x)
         m.data[x] = e.stack.pop_double();
     e.stack.push(std::move(m));
-    e.stack.display_top();
+    e.auto_display();
 }
 static void ones_command(Environment& e)
 {
@@ -70,7 +71,7 @@ static void ones_command(Environment& e)
     MatrixData m;
     m.data.resize(extent, 1.0);
     e.stack.push(std::move(m));
-    e.stack.display_top();
+    e.auto_display();
 }
 
 static void store_command(Environment& e)
@@ -79,14 +80,14 @@ static void store_command(Environment& e)
     auto v = e.stack.pop();
     e.varmap.emplace(sym.c_str(), std::move(v));
 
-    e.stack.display_top();
+    e.auto_display();
 }
 static void load_command(Environment& e)
 {
     auto sym = e.stack.pop_symbol();
     e.stack.push(e.varmap.at(sym.c_str()).clone());
 
-    e.stack.display_top();
+    e.auto_display();
 }
 
 static void mat_mul_command(Environment& e)
@@ -97,7 +98,7 @@ static void mat_mul_command(Environment& e)
         x *= d;
     e.stack.push(std::move(m));
 
-    e.stack.display_top();
+    e.auto_display();
 }
 
 static void mat_pow_command(Environment& e)
@@ -108,7 +109,7 @@ static void mat_pow_command(Environment& e)
         x = pow(x, d);
     e.stack.push(std::move(m));
 
-    e.stack.display_top();
+    e.auto_display();
 }
 
 static void mat_add_command(Environment& e)
@@ -119,7 +120,7 @@ static void mat_add_command(Environment& e)
         x += d;
     e.stack.push(std::move(m));
 
-    e.stack.display_top();
+    e.auto_display();
 }
 
 static void mat_add_mat_command(Environment& e)
@@ -134,7 +135,7 @@ static void mat_add_mat_command(Environment& e)
 
     e.stack.push(std::move(m1));
 
-    e.stack.display_top();
+    e.auto_display();
 }
 
 static void size_command(Environment& e)
@@ -144,7 +145,7 @@ static void size_command(Environment& e)
     e.stack.push(std::move(m));
     e.stack.push(s);
 
-    e.stack.display_top();
+    e.auto_display();
 }
 
 static std::string serialize_helper(MatrixData const& m)
@@ -191,36 +192,21 @@ static void dump_command(Environment& e)
 {
     fmt::printf("Filename>");
 
-    std::string filename;
-    auto ch = _fgetchar();
-    while (ch == '\b' || ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t')
-        ch = _fgetchar();
+    std::string filename = read_line();
 
-    while (ch > 0 && ch < 256 && ch != '\n' && ch != '\r')
-    {
-        filename += ch;
-        ch = _fgetchar();
-    }
-
-    if (ch <= 0 || ch >= 256) throw std::runtime_error("unexpected EOF");
-
-    namespace fs = std::experimental::filesystem;
-    fs::path p = fs::absolute(filename);
-    FILE* out = nullptr;
-    if (_wfopen_s(&out, p.native().c_str(), L"wb")) throw std::runtime_error("Could not open file for writing");
-
-    std::unique_ptr<FILE, void (*)(FILE*)> file_closer(out, [](FILE* f) { fclose(f); });
+    auto p = fs::absolute(filename);
+    auto out_file_holder = CFile::open_wb(p);
+    CFileView out_file = out_file_holder;
 
     for (auto&& p : e.varmap)
     {
         auto s = serialize_helper(p.second);
-        fswrite(s, out);
-        fmt::fprintf(out, "%s\n$$%s store\n", s, p.first);
+        out_file.printf("%s\n$$%s store\n", s, p.first);
     }
 
     for (int x = e.stack.size() - 1; x >= 0; --x)
     {
-        fmt::fprintf(out, "%s\n", serialize_helper(e.stack.at_from_top(x)));
+        out_file.printf("%s\n", serialize_helper(e.stack.at_from_top(x)));
     }
 
     fmt::printf("Wrote state to \"%s\".\n", p.u8string());

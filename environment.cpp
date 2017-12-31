@@ -2,6 +2,29 @@
 
 #include "environment.h"
 
+void Environment::auto_display() const
+{
+    if (auto_display_flag) stack.display_top();
+}
+
+std::string read_line()
+{
+    std::string str;
+    auto ch = _fgetchar();
+    while (ch == '\b' || ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t')
+        ch = _fgetchar();
+
+    while (ch > 0 && ch < 256 && ch != '\n' && ch != '\r')
+    {
+        str += ch;
+        ch = _fgetchar();
+    }
+
+    if (ch <= 0 || ch >= 256) throw std::runtime_error("unexpected EOF");
+
+    return str;
+}
+
 Value::Value(std::string_view a, Value::SymbolTag) : type(ValueType::SYMBOL), s(a) {}
 Value::Value(std::string_view a, Value::StringTag) : type(ValueType::STRING), s(a) {}
 Value Value::clone() const

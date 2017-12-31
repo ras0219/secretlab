@@ -9,6 +9,9 @@
 #include <unordered_map>
 #include <vector>
 
+// TODO: move to another file
+std::string read_line();
+
 enum class ValueType
 {
     SCALAR,
@@ -73,6 +76,10 @@ struct Environment
 {
     Stack stack;
     VarMap varmap;
+
+    bool auto_display_flag = true;
+
+    void auto_display() const;
 };
 
 struct Command
