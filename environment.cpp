@@ -2,19 +2,16 @@
 
 #include "environment.h"
 
-Value::Value(std::string_view a) : type(ValueType::SYMBOL)
-{
-    s.reset(new char[a.size() + 1]);
-    memcpy(s.get(), a.data(), a.size());
-    s.get()[a.size()] = '\0';
-}
+Value::Value(std::string_view a, Value::SymbolTag) : type(ValueType::SYMBOL), s(a) {}
+Value::Value(std::string_view a, Value::StringTag) : type(ValueType::STRING), s(a) {}
 Value Value::clone() const
 {
     switch (type)
     {
         case ValueType::SCALAR: return d;
         case ValueType::MATRIX: return m.clone();
-        case ValueType::SYMBOL: return std::string_view(s.get(), strlen(s.get()));
+        case ValueType::SYMBOL: return {s.to_string_view(), Value::symbol_tag};
+        case ValueType::STRING: return {s.to_string_view(), Value::string_tag};
         default: throw std::runtime_error("unknown value type");
     }
 }
@@ -28,7 +25,7 @@ void Value::display() const
             fmt::printf("= ");
             ::display(m);
             return;
-        case ValueType::SYMBOL: fmt::printf("= $%s\n", s.get()); return;
+        case ValueType::SYMBOL: fmt::printf("= $%s\n", s.c_str()); return;
         default: std::terminate();
     }
 }
@@ -50,10 +47,19 @@ double Stack::pop_double()
     return r;
 }
 
-std::unique_ptr<char[]> Stack::pop_symbol()
+CString Stack::pop_symbol()
 {
     if (m_stack.size() < 1) throw std::runtime_error("stack underflow");
     if (m_stack.back().type != ValueType::SYMBOL) throw std::runtime_error("type error: expected symbol");
+    auto s = std::move(m_stack.back().s);
+    m_stack.pop_back();
+    return s;
+}
+
+CString Stack::pop_string()
+{
+    if (m_stack.size() < 1) throw std::runtime_error("stack underflow");
+    if (m_stack.back().type != ValueType::STRING) throw std::runtime_error("type error: expected string");
     auto s = std::move(m_stack.back().s);
     m_stack.pop_back();
     return s;

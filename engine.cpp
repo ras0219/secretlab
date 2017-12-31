@@ -77,14 +77,14 @@ static void store_command(Environment& e)
 {
     auto sym = e.stack.pop_symbol();
     auto v = e.stack.pop();
-    e.varmap.emplace(sym.get(), std::move(v));
+    e.varmap.emplace(sym.c_str(), std::move(v));
 
     e.stack.display_top();
 }
 static void load_command(Environment& e)
 {
     auto sym = e.stack.pop_symbol();
-    e.stack.push(e.varmap.at(sym.get()).clone());
+    e.stack.push(e.varmap.at(sym.c_str()).clone());
 
     e.stack.display_top();
 }
@@ -122,19 +122,128 @@ static void mat_add_command(Environment& e)
     e.stack.display_top();
 }
 
+static void mat_add_mat_command(Environment& e)
+{
+    auto m1 = e.stack.pop_matrix();
+    auto m2 = e.stack.pop_matrix();
+    if (m1.data.size() != m2.data.size()) throw std::runtime_error("matricies do not have equal extents");
+    for (size_t i = 0; i < m1.data.size(); ++i)
+    {
+        m1.data[i] += m2.data[i];
+    }
+
+    e.stack.push(std::move(m1));
+
+    e.stack.display_top();
+}
+
+static void size_command(Environment& e)
+{
+    auto m = e.stack.pop_matrix();
+    auto s = m.data.size();
+    e.stack.push(std::move(m));
+    e.stack.push(s);
+
+    e.stack.display_top();
+}
+
+static std::string serialize_helper(MatrixData const& m)
+{
+    std::string ret;
+    for (auto&& x : m.data)
+        ret += fmt::sprintf("%.16f ", x);
+    ret += fmt::sprintf("%d matrix", (int)m.data.size());
+    return ret;
+}
+static std::string serialize_helper(double d) { return fmt::sprintf("%.16f", d); }
+static std::string serialize_helper(const Value& v)
+{
+    switch (v.type)
+    {
+        case ValueType::MATRIX: return serialize_helper(v.m);
+        case ValueType::SCALAR: return serialize_helper(v.d);
+        case ValueType::SYMBOL: return fmt::sprintf("$$%s\n", v.s.c_str());
+        case ValueType::STRING: return fmt::sprintf("\"%s\"\n", v.s.c_str());
+        default: std::terminate();
+    }
+}
+
+static void serialize_command(Environment& e) { fmt::printf("%s\n", serialize_helper(e.stack.at_from_top(0))); }
+
+static void pwd_command(Environment&)
+{
+    std::array<wchar_t, 1024> cwd;
+    cwd[0] = L'\0';
+    auto hr = GetCurrentDirectoryW(cwd.size(), cwd.data());
+    if (FAILED(hr))
+    {
+        throw std::runtime_error("GetCurrentDirectoryW failed");
+    }
+    std::array<char, 1024> utf8_cwd;
+    utf8_cwd[0] = '\0';
+    auto z = WideCharToMultiByte(CP_UTF8, 0, cwd.data(), -1, utf8_cwd.data(), utf8_cwd.size(), nullptr, nullptr);
+    fmt::printf("%s\n", utf8_cwd.data());
+}
+
+static void fswrite(std::string_view sv, FILE* f) { fwrite(sv.data(), 1, sv.size(), f); }
+
+static void dump_command(Environment& e)
+{
+    fmt::printf("Filename>");
+
+    std::string filename;
+    auto ch = _fgetchar();
+    while (ch == '\b' || ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t')
+        ch = _fgetchar();
+
+    while (ch > 0 && ch < 256 && ch != '\n' && ch != '\r')
+    {
+        filename += ch;
+        ch = _fgetchar();
+    }
+
+    if (ch <= 0 || ch >= 256) throw std::runtime_error("unexpected EOF");
+
+    namespace fs = std::experimental::filesystem;
+    fs::path p = fs::absolute(filename);
+    FILE* out = nullptr;
+    if (_wfopen_s(&out, p.native().c_str(), L"wb")) throw std::runtime_error("Could not open file for writing");
+
+    std::unique_ptr<FILE, void (*)(FILE*)> file_closer(out, [](FILE* f) { fclose(f); });
+
+    for (auto&& p : e.varmap)
+    {
+        auto s = serialize_helper(p.second);
+        fswrite(s, out);
+        fmt::fprintf(out, "%s\n$$%s store\n", s, p.first);
+    }
+
+    for (int x = e.stack.size() - 1; x >= 0; --x)
+    {
+        fmt::fprintf(out, "%s\n", serialize_helper(e.stack.at_from_top(x)));
+    }
+
+    fmt::printf("Wrote state to \"%s\".\n", p.u8string());
+}
+
 using namespace std::string_view_literals;
 
 static constexpr Command commands[] = {
+    {"dump"sv, "dump"sv, &dump_command},
     {"exit"sv, "exit"sv, &exit_command},
     {"help"sv, "help"sv, &help_command},
+    {"pwd"sv, "pwd"sv, &pwd_command},
     {"inner"sv, "inner :: m1 m2 dExtent dStride1 dStride2 -> m"sv, &inner_command},
     {"load"sv, "load :: y -> *"sv, &load_command},
     {"matrix"sv, "matrix :: d... dLen -> m"sv, &matrix_command},
+    {"serialize"sv, "serialize :: * -> *"sv, &serialize_command},
     {"ones"sv, "ones :: dLen -> m"sv, &ones_command},
     {"m+"sv, "m+ :: m d -> m"sv, &mat_add_command},
     {"m*"sv, "m* :: m d -> m"sv, &mat_mul_command},
     {"m**"sv, "m** :: m d -> m"sv, &mat_pow_command},
+    {"m+m"sv, "m+m :: m m -> m"sv, &mat_add_mat_command},
     {"pop"sv, "pop :: * ->"sv, &pop_command},
+    {"size"sv, "size :: m -> m d"sv, &size_command},
     {"stack"sv, "stack :: ->"sv, &stack_command},
     {"store"sv, "store :: * y ->"sv, &store_command},
     {"+"sv, "+ :: d d -> d"sv, &plus_command},

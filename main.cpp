@@ -4,11 +4,6 @@
 #include "environment.h"
 #include "matrix.h"
 
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-
-#include <Windows.h>
-
 struct Engine
 {
     Commands commands = {0, nullptr};
@@ -77,7 +72,7 @@ int main()
                 if (sv[1] == '$')
                 {
                     if (sv.size() == 2) throw std::runtime_error("expected variable name");
-                    env.stack.push(sv.substr(2));
+                    env.stack.push(sv.substr(2), Value::symbol_tag);
                 }
                 else
                 {
@@ -97,6 +92,14 @@ int main()
 
                 env.stack.push(env.stack.at_from_top(i).clone());
                 env.stack.display_top();
+            }
+            else if (sv[0] == '"')
+            {
+                if (sv.size() < 2 || sv.back() != '"') throw std::runtime_error("unterminated string literal");
+                auto str = sv;
+                str.remove_prefix(1);
+                str.remove_suffix(1);
+                env.stack.push(str, Value::string_tag);
             }
             else if (sv == "load-engine")
             {

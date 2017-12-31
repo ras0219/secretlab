@@ -1,6 +1,8 @@
 #pragma once
 
+#include "cstring.h"
 #include "matrix.h"
+
 #include <memory>
 #include <string>
 #include <string_view>
@@ -12,12 +14,24 @@ enum class ValueType
     SCALAR,
     MATRIX,
     SYMBOL,
+    STRING,
 };
 
 struct Value
 {
+    struct SymbolTag
+    {
+    };
+    static constexpr SymbolTag symbol_tag = {};
+
+    struct StringTag
+    {
+    };
+    static constexpr StringTag string_tag = {};
+
     Value(double a) : type(ValueType::SCALAR), d(a) {}
-    Value(std::string_view a);
+    Value(std::string_view a, SymbolTag);
+    Value(std::string_view a, StringTag);
     Value(MatrixData&& a) : type(ValueType::MATRIX), m(std::move(a)) {}
 
     Value clone() const;
@@ -25,24 +39,26 @@ struct Value
 
     ValueType type;
     double d;
-    std::unique_ptr<char[]> s;
+    CString s;
     MatrixData m;
 };
 
 struct Stack
 {
-    template<class T>
-    void push(T&& i)
+    template<class... T>
+    void push(T&&... t)
     {
-        m_stack.emplace_back(std::forward<T>(i));
+        m_stack.emplace_back(std::forward<T>(t)...);
     }
 
     Value pop();
     double pop_double();
-    std::unique_ptr<char[]> pop_symbol();
+    CString pop_symbol();
+    CString pop_string();
     MatrixData pop_matrix();
 
     const Value& at_from_top(int index) const;
+    int size() const { return m_stack.size(); }
 
     void display_top() const;
     void display() const;
