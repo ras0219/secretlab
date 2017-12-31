@@ -212,6 +212,8 @@ static void dump_command(Environment& e)
     fmt::printf("Wrote state to \"%s\".\n", p.u8string());
 }
 
+static void clear_command(Environment& env) { env.stack.clear(); }
+
 using namespace std::string_view_literals;
 
 static constexpr Command commands[] = {
@@ -219,6 +221,7 @@ static constexpr Command commands[] = {
     {"exit"sv, "exit"sv, &exit_command},
     {"help"sv, "help"sv, &help_command},
     {"pwd"sv, "pwd"sv, &pwd_command},
+    {"clear"sv, "clear :: ... ->"sv, &clear_command},
     {"inner"sv, "inner :: m1 m2 dExtent dStride1 dStride2 -> m"sv, &inner_command},
     {"load"sv, "load :: y -> *"sv, &load_command},
     {"matrix"sv, "matrix :: d... dLen -> m"sv, &matrix_command},
@@ -246,6 +249,7 @@ static void help_command(Environment& e)
         fmt::printf("  %s\n", command.signature);
     }
     fmt::printf("\nSpecial operations:\n"
+                "  load-file - interpret a file\n"
                 "  <N> - push literal number N\n"
                 "  @<N> - push Nth stack element, from the top\n"
                 "  $<name> - push value of variable <name>\n"

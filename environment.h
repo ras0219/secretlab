@@ -60,6 +60,7 @@ struct Stack
     CString pop_string();
     MatrixData pop_matrix();
 
+    void clear() { m_stack.clear(); }
     const Value& at_from_top(int index) const;
     int size() const { return m_stack.size(); }
 
