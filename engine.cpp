@@ -162,8 +162,8 @@ static std::string serialize_helper(const Value& v)
     {
         case ValueType::MATRIX: return serialize_helper(v.m);
         case ValueType::SCALAR: return serialize_helper(v.d);
-        case ValueType::SYMBOL: return fmt::sprintf("$$%s\n", v.s.c_str());
-        case ValueType::STRING: return fmt::sprintf("\"%s\"\n", v.s.c_str());
+        case ValueType::SYMBOL: return fmt::sprintf("$$%s", v.s.c_str());
+        case ValueType::STRING: return fmt::sprintf("\"%s\"", v.s.c_str());
         default: std::terminate();
     }
 }
